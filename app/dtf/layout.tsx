@@ -1,0 +1,95 @@
+import { Roboto_Mono, Figtree, Instrument_Serif } from "next/font/google";
+import { Metadata } from "next";
+import { GeistMono } from "geist/font/mono";
+import "./globals.css";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { MobileHeader } from "@/components/dashboard/mobile-header";
+import { DashboardSidebar } from "@/components/dashboard/sidebar";
+import PriceTicker from "@/components/web3/price-ticker";
+import mockDataJson from "@/mock.json";
+import type { MockData } from "@/types/dashboard";
+import Widget from "@/components/dashboard/widget";
+import Notifications from "@/components/dashboard/notification";
+import { MobileChat } from "@/components/chat/mobile-chat";
+import Chat from "@/components/chat/index";
+
+const mockData = mockDataJson as MockData;
+
+const robotoMono = Roboto_Mono({
+  variable: "--font-roboto-mono",
+  subsets: ["latin"],
+});
+
+const figtree = Figtree({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-figtree",
+  display: "swap",
+});
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: ["400"],
+  style: ["normal", "italic"],
+  variable: "--font-instrument-serif",
+  display: "swap",
+});
+
+// const rebelGrotesk = localFont({
+//   src: "../public/fonts/Rebels-Fett.woff2",
+//   variable: "--font-rebels",
+//   display: "swap",
+// });
+
+export const metadata: Metadata = {
+  title: {
+    template: "%s – OSMO",
+    default: "OSMO",
+  },
+  description:
+    "OSMO lets you compose on‑chain token baskets with rules and rebalancing. Diversify, automate, and invest in crypto narratives with index‑grade simplicity.",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" className="dark">
+      <head>
+        <link
+          rel="preload"
+          href="/fonts/Rebels-Fett.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        <style>{`
+html {
+  font-family: ${figtree.style.fontFamily};
+  --font-sans: ${figtree.variable};
+  --font-mono: ${GeistMono.variable};
+  --font-instrument-serif: ${instrumentSerif.variable};
+}
+        `}</style>
+      </head>
+      <body
+        className={`${figtree.variable} ${instrumentSerif.variable} ${robotoMono.variable} antialiased`}
+      >
+          <SidebarProvider>
+            {/* Mobile Header - only visible on mobile */}
+            <MobileHeader mockData={mockData} />
+
+            {/* Main Content */}
+            <div className="w-full">
+              {children}
+            </div>
+
+            {/* Mobile Chat - floating CTA with drawer */}
+            <MobileChat />
+          </SidebarProvider>
+      </body>
+    </html>
+  );
+}
