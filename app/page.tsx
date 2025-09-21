@@ -107,7 +107,7 @@ export default function Web3LandingPage() {
       <HeroContent />
 
       {/* Enhanced Hero Section with Web3 Focus */}
-      <section className="relative z-10 text-white">
+      <section className="relative z-20 text-white">
         <div className="max-w-7xl mx-auto px-4 py-16">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
