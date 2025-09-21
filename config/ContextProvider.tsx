@@ -3,7 +3,16 @@
 import { wagmiAdapter, projectId } from '@/config'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createAppKit } from '@reown/appkit/react'
-import { mainnet, arbitrum } from '@reown/appkit/networks'
+import { mainnet, arbitrum, unichainSepolia } from '@reown/appkit/networks'
+
+// Custom Unichain Sepolia configuration with custom RPC
+const customUnichainSepolia = {
+  ...unichainSepolia,
+  rpcUrls: {
+    default: { http: [process.env.NEXT_PUBLIC_RPC_URL || 'https://sepolia.unichain.org'] },
+    public: { http: [process.env.NEXT_PUBLIC_RPC_URL || 'https://sepolia.unichain.org'] }
+  }
+}
 import React, { type ReactNode } from 'react'
 import { cookieToInitialState, WagmiProvider, type Config } from 'wagmi'
 
@@ -16,8 +25,8 @@ if (!projectId) {
 
 // Set up metadata
 const metadata = {
-  name: 'DTF',
-  description: 'Simple DTF',
+  name: 'OSMO',
+  description: 'Neighbourly DTF',
   url: 'https://appkitexampleapp.com', // origin must match your domain & subdomain
   icons: ['https://avatars.githubusercontent.com/u/179229932']
 }
@@ -26,8 +35,8 @@ const metadata = {
 const modal = createAppKit({
   adapters: [wagmiAdapter],
   projectId,
-  networks: [mainnet, arbitrum],
-  defaultNetwork: mainnet,
+  networks: [mainnet, arbitrum, customUnichainSepolia],
+  defaultNetwork: customUnichainSepolia,
   metadata: metadata,
   features: {
     analytics: true // Optional - defaults to your Cloud configuration
