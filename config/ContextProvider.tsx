@@ -15,6 +15,7 @@ const customUnichainSepolia = {
 }
 import React, { type ReactNode } from 'react'
 import { cookieToInitialState, WagmiProvider, type Config } from 'wagmi'
+import { DTFProvider } from '@/hooks/use-dtf-context'
 
 // Set up queryClient
 const queryClient = new QueryClient()
@@ -48,7 +49,11 @@ function ContextProvider({ children, cookies }: { children: ReactNode; cookies: 
 
   return (
     <WagmiProvider config={wagmiAdapter.wagmiConfig as Config} initialState={initialState}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <DTFProvider>
+          {children}
+        </DTFProvider>
+      </QueryClientProvider>
     </WagmiProvider>
   )
 }
