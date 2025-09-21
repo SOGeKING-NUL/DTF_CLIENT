@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   motion,
   AnimatePresence,
 } from "motion/react";
-import { ArrowRight } from "lucide-react";
+import { X, TrendingUp, TrendingDown } from "lucide-react";
 
 interface TokenData {
   id: number;
@@ -24,7 +24,9 @@ interface DTFTokenTooltipProps {
 }
 
 export const DTFTokenTooltip = ({ tokens, maxDisplay = 5 }: DTFTokenTooltipProps) => {
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [closeTimeout, setCloseTimeout] = useState<NodeJS.Timeout | null>(null);
   const displayTokens = tokens.slice(0, maxDisplay);
   const remainingCount = tokens.length - maxDisplay;
 
@@ -36,17 +38,99 @@ export const DTFTokenTooltip = ({ tokens, maxDisplay = 5 }: DTFTokenTooltipProps
     }
   };
 
+  const formatChange = (change: number) => {
+    const isPositive = change >= 0;
+    const icon = isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />;
+    const color = isPositive ? "text-green-400" : "text-red-400";
+    
+    return (
+      <span className={`flex items-center gap-1 ${color}`}>
+        {icon}
+        {isPositive ? '+' : ''}{change.toFixed(2)}%
+      </span>
+    );
+  };
+
+  const handleTokenHover = () => {
+    // Clear any existing close timeout
+    if (closeTimeout) {
+      clearTimeout(closeTimeout);
+      setCloseTimeout(null);
+    }
+    
+    // Clear any existing hover timeout
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+    }
+    
+    // Set a small delay before opening modal to prevent accidental triggers
+    const timeout = setTimeout(() => {
+      setIsModalOpen(true);
+    }, 200);
+    
+    setHoverTimeout(timeout);
+  };
+
+  const handleTokenLeave = () => {
+    // Clear hover timeout if user leaves before modal opens
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+      setHoverTimeout(null);
+    }
+    
+    // Set close timeout to allow user to move to modal
+    const timeout = setTimeout(() => {
+      setIsModalOpen(false);
+    }, 300);
+    
+    setCloseTimeout(timeout);
+  };
+
+  const handleModalHover = () => {
+    // Clear close timeout when hovering over modal
+    if (closeTimeout) {
+      clearTimeout(closeTimeout);
+      setCloseTimeout(null);
+    }
+  };
+
+  const handleModalLeave = () => {
+    // Set a short delay before closing when leaving modal
+    const timeout = setTimeout(() => {
+      setIsModalOpen(false);
+    }, 200);
+    setCloseTimeout(timeout);
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+  };
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeout) {
+        clearTimeout(hoverTimeout);
+      }
+      if (closeTimeout) {
+        clearTimeout(closeTimeout);
+      }
+    };
+  }, [hoverTimeout, closeTimeout]);
+
   return (
     <div className="relative group">
-      {/* Token circles - matching the overlapping design from screenshot */}
-      <div className="flex items-center gap-1">
+      {/* Token circles */}
+      <div 
+        className="flex items-center gap-1 group"
+        onMouseEnter={handleTokenHover}
+        onMouseLeave={handleTokenLeave}
+      >
         {displayTokens.map((token, idx) => (
           <div
             key={token.id}
-            className={`w-8 h-8 rounded-full bg-gradient-to-r ${token.color} flex items-center justify-center text-xs font-bold text-white border border-white/20 hover:scale-110 transition-transform duration-200 cursor-pointer`}
-            style={{ marginLeft: idx > 0 ? '-4px' : '0', zIndex: displayTokens.length - idx }}
-            onMouseEnter={() => setHoveredIndex(token.id)}
-            onMouseLeave={() => setHoveredIndex(null)}
+            className={`w-10 h-10 rounded-full bg-gradient-to-r ${token.color} flex items-center justify-center text-sm font-bold text-white border-2 border-white/20 hover:scale-110 transition-all duration-300 cursor-pointer hover:border-white/40`}
+            style={{ marginLeft: idx > 0 ? '-6px' : '0', zIndex: displayTokens.length - idx }}
           >
             {token.logo}
           </div>
@@ -55,73 +139,88 @@ export const DTFTokenTooltip = ({ tokens, maxDisplay = 5 }: DTFTokenTooltipProps
         {/* Show remaining count if there are more tokens */}
         {remainingCount > 0 && (
           <div 
-            className="w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-xs font-bold text-white/70"
-            style={{ marginLeft: '-4px', zIndex: 0 }}
+            className="w-10 h-10 rounded-full bg-white/10 border-2 border-white/20 flex items-center justify-center text-sm font-bold text-white/70 hover:bg-white/20 transition-colors cursor-pointer"
+            style={{ marginLeft: '-6px', zIndex: 0 }}
           >
             +{remainingCount}
           </div>
         )}
       </div>
 
-      {/* Hover tooltip - exact design from screenshot */}
+      {/* All Tokens Modal */}
       <AnimatePresence>
-        {hoveredIndex !== null && (
-          <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            className="absolute -top-2 left-0 z-50 w-[320px] p-3 rounded-2xl bg-white/10 bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-2xl ring-1 ring-white/20 shadow-[0_10px_50px_rgba(0,0,0,0.45)]"
-          >
-            {/* Header with overlapping token circles - exactly like screenshot */}
-            <div className="flex items-center gap-1 mb-4">
-              {displayTokens.slice(0, 5).map((token, idx) => (
-                <div
-                  key={token.id}
-                  className={`w-8 h-8 rounded-full bg-gradient-to-r ${token.color} flex items-center justify-center text-xs font-bold text-white border border-white/20`}
-                  style={{ marginLeft: idx > 0 ? '-4px' : '0', zIndex: 5 - idx }}
-                >
-                  {token.logo}
-                </div>
-              ))}
-              {remainingCount > 0 && (
-                <div 
-                  className="w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-xs font-bold text-white/70"
-                  style={{ marginLeft: '-4px', zIndex: 0 }}
-                >
-                  +{remainingCount}
-                </div>
-              )}
-            </div>
+        {isModalOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+              onClick={handleModalClose}
+            />
+            
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: "spring", duration: 0.3 }}
+              className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-[500px] max-w-[95vw] sm:max-w-[90vw] max-h-[80vh] overflow-hidden"
+              onMouseEnter={handleModalHover}
+              onMouseLeave={handleModalLeave}
+            >
+              <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl overflow-hidden h-full flex flex-col">
+                {/* Content - Scrollable */}
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                  <div className="space-y-4">
+                    {tokens.map((token, index) => (
+                      <div key={token.id} className="bg-white/5 rounded-xl p-4 border border-white/10 hover:bg-white/8 transition-colors">
+                        {/* Token Header */}
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className={`w-10 h-10 rounded-full bg-gradient-to-r ${token.color} flex items-center justify-center text-sm font-bold text-white border border-white/20`}>
+                            {token.logo}
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-white">{token.name}</h4>
+                            <p className="text-white/70 text-sm">{token.symbol}</p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-blue-400 font-bold">{token.weight.toFixed(2)}%</div>
+                            <div className="text-white/70 text-xs">Weight</div>
+                          </div>
+                        </div>
 
-            {/* Token list - exact layout and styling from screenshot */}
-            <div className="space-y-3">
-              {tokens.map((token) => (
-                <div key={token.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-7 h-7 rounded-full bg-gradient-to-r ${token.color} flex items-center justify-center text-xs font-bold text-white border border-white/20`}>
-                      {token.logo}
-                    </div>
-                    <div>
-                      <div className="text-blue-400 text-sm font-medium">{token.weight.toFixed(2)}%</div>
-                      <div className="text-white text-xs">{token.name}</div>
-                    </div>
-                  </div>
-                  <div className="text-white/70 text-sm font-medium">
-                    ${token.symbol}
+                        {/* Token Details */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-white/5 rounded-lg p-3">
+                            <p className="text-white/70 text-xs mb-1">Current Price</p>
+                            <p className="text-white font-semibold">{formatCurrency(token.price || 0)}</p>
+                          </div>
+                          <div className="bg-white/5 rounded-lg p-3">
+                            <p className="text-white/70 text-xs mb-1">24h Change</p>
+                            {token.change24h !== undefined ? formatChange(token.change24h) : (
+                              <p className="text-white/70 text-sm">--</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Weight Progress Bar */}
+                        <div className="mt-3">
+                          <div className="w-full bg-white/10 rounded-full h-2">
+                            <div 
+                              className="bg-gradient-to-r from-blue-500 to-blue-400 h-2 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min(token.weight, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
-
-            {/* Footer button - matching screenshot design */}
-            <div className="mt-4 pt-3 border-t border-white/10">
-              <button className="w-full bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 text-white text-sm font-medium flex items-center justify-center gap-2 transition-colors">
-                View entire basket
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </motion.div>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>

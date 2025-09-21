@@ -31,6 +31,8 @@ import { DTFLookup } from '@/components/dtf/dtf-lookup';
 import { useWallet } from '@/hooks/use-wallet';
 import { useTransformedDTFs, useDTF } from '@/hooks/use-dtf-context';
 import { DTFTokenTooltip } from '@/components/ui/dtf-token-tooltip';
+import { ethers } from 'ethers';
+import DTF_ABI from "@/DTF/abi/DTF";
 
 // DTF data interface
 interface DTFData {
@@ -151,6 +153,16 @@ export default function DTFPortfolioDashboard() {
   const [activeCategory, setActiveCategory] = useState('Index DTFs');
   const [activeChain, setActiveChain] = useState('All chains');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // TVL state
+  const [totalTVL, setTotalTVL] = useState<string>('0');
+  const [tvlLoading, setTvlLoading] = useState(false);
+  const [tvlError, setTvlError] = useState<string | null>(null);
+  
+  // Individual DTF TVL state
+  const [dtfTVLs, setDtfTVLs] = useState<{ [key: string]: string }>({});
+  const [dtfTvlLoading, setDtfTvlLoading] = useState<{ [key: string]: boolean }>({});
+  const [dtfTvlError, setDtfTvlError] = useState<{ [key: string]: string | null }>({});
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -172,6 +184,171 @@ export default function DTFPortfolioDashboard() {
       return `$${(value / 1000).toFixed(0)}K`;
     }
     return `$${value.toFixed(0)}`;
+  };
+
+  // Function to fetch total TVL from all DTF contracts
+  const fetchTotalTVL = async () => {
+    if (!rawDtfs || rawDtfs.length === 0) {
+      console.log('No DTFs available for TVL calculation');
+      return;
+    }
+    
+    console.log('Starting TVL fetch for', rawDtfs.length, 'DTFs');
+    setTvlLoading(true);
+    setTvlError(null);
+    
+    try {
+      let totalTvlWei = BigInt(0);
+      
+      // Use wallet provider or fallback to custom RPC
+      let provider: any = wallet.provider;
+      if (!provider) {
+        const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || 'https://sepolia.unichain.org';
+        provider = new ethers.JsonRpcProvider(rpcUrl);
+      }
+      
+      // Fetch TVL from each DTF contract
+      for (const dtf of rawDtfs) {
+        try {
+          console.log(`Fetching TVL for DTF: ${dtf.name} (${dtf.dtfAddress})`);
+          // Create DTF contract instance directly instead of using hook
+          const dtfContract = new ethers.Contract(dtf.dtfAddress, DTF_ABI, provider);
+          const tvlWei = await dtfContract.getCurrentPortfolioValue();
+          const tvlWeiBigInt = BigInt(tvlWei.toString());
+          totalTvlWei += tvlWeiBigInt;
+          console.log(`TVL for ${dtf.name}: ${tvlWei} ETH`);
+        } catch (error) {
+          console.error(`Error fetching TVL for DTF ${dtf.dtfAddress}:`, error);
+          // Continue with other contracts even if one fails
+        }
+      }
+      
+      // Convert to formatted string
+      const totalTvlEth = ethers.formatEther(totalTvlWei);
+      console.log('Total TVL calculated:', totalTvlEth, 'ETH');
+      setTotalTVL(totalTvlEth);
+    } catch (error) {
+      console.error('Error fetching total TVL:', error);
+      setTvlError('Failed to fetch TVL data');
+    } finally {
+      setTvlLoading(false);
+    }
+  };
+
+  // Function to fetch TVL for individual DTF
+  const fetchDTFTVL = async (dtfAddress: string) => {
+    setDtfTvlLoading(prev => ({ ...prev, [dtfAddress]: true }));
+    setDtfTvlError(prev => ({ ...prev, [dtfAddress]: null }));
+    
+    try {
+      // Use wallet provider or fallback to custom RPC
+      let provider: any = wallet.provider;
+      if (!provider) {
+        const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || 'https://sepolia.unichain.org';
+        provider = new ethers.JsonRpcProvider(rpcUrl);
+      }
+      
+      console.log(`Fetching TVL for DTF: ${dtfAddress}`);
+      const dtfContract = new ethers.Contract(dtfAddress, DTF_ABI, provider);
+      const tvlWei = await dtfContract.getCurrentPortfolioValue();
+      const tvlEth = ethers.formatEther(tvlWei);
+      
+      console.log(`TVL for DTF ${dtfAddress}: ${tvlEth} ETH`);
+      setDtfTVLs(prev => ({ ...prev, [dtfAddress]: tvlEth }));
+    } catch (error) {
+      console.error(`Error fetching TVL for DTF ${dtfAddress}:`, error);
+      setDtfTvlError(prev => ({ ...prev, [dtfAddress]: 'Failed to fetch TVL' }));
+    } finally {
+      setDtfTvlLoading(prev => ({ ...prev, [dtfAddress]: false }));
+    }
+  };
+
+  // Function to fetch TVL for all DTFs
+  const fetchAllDTFTVLs = async () => {
+    if (!rawDtfs || rawDtfs.length === 0) return;
+    
+    console.log('Fetching TVL for all DTFs...');
+    for (const dtf of rawDtfs) {
+      await fetchDTFTVL(dtf.dtfAddress);
+    }
+  };
+
+  // Fetch TVL when DTF data is available
+  useEffect(() => {
+    if (rawDtfs && rawDtfs.length > 0 && !loading && !error) {
+      fetchTotalTVL();
+      fetchAllDTFTVLs();
+    }
+  }, [rawDtfs, loading, error, wallet.provider]);
+
+  // Format TVL for display
+  const formatTVLDisplay = (tvl: string) => {
+    const tvlNum = parseFloat(tvl);
+    if (tvlLoading) return 'Loading...';
+    if (tvlError) return 'Error loading TVL';
+    if (tvlNum === 0) return '$0';
+    
+    return formatCurrency(tvlNum);
+  };
+
+  // Format TVL for display with loading spinner
+  const renderTVLDisplay = () => {
+    if (tvlLoading) {
+      return (
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+          <span>Loading TVL...</span>
+        </div>
+      );
+    }
+    
+    if (tvlError) {
+      return (
+        <div className="flex items-center gap-2 text-red-400">
+          <span>Error loading TVL</span>
+        </div>
+      );
+    }
+    
+    return formatCurrency(parseFloat(totalTVL));
+  };
+
+  // Format individual DTF TVL display
+  const renderDTFTVLDisplay = (dtfAddress: string) => {
+    const isLoading = dtfTvlLoading[dtfAddress];
+    const error = dtfTvlError[dtfAddress];
+    const tvl = dtfTVLs[dtfAddress];
+    
+    if (isLoading) {
+      return (
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+          <span className="text-white/70 text-sm">Loading...</span>
+        </div>
+      );
+    }
+    
+    if (error) {
+      return (
+        <div className="text-red-400 text-sm">
+          Error
+        </div>
+      );
+    }
+    
+    if (!tvl || tvl === '0') {
+      return (
+        <div className="text-white/50 text-sm">
+          $0
+        </div>
+      );
+    }
+    
+    return (
+      <div className="text-white font-medium">
+        {formatCurrency(parseFloat(tvl))}
+      </div>
+    );
   };
 
   const categories = [
@@ -217,104 +394,6 @@ export default function DTFPortfolioDashboard() {
 
       {/* Main Content Area */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        {/* TVL Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-12"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold">TVL in OSMO</h2>
-          </div>
-
-          <div className="flex items-center gap-4 mb-4">
-            <div className="text-4xl sm:text-5xl lg:text-6xl font-bold">$543,018,524</div>
-            <div className="flex items-center gap-2 bg-green-500/20 px-3 py-1 rounded-full">
-              <ArrowUp className="w-4 h-4 text-green-400" />
-            </div>
-          </div>
-
-          <p className="text-white/70 mb-6">Annualized protocol revenue: $14.7M</p>
-
-          <div className="mb-6">
-            <Button variant="outline" className="border-white/20 text-white hover:bg-white/10">
-              <Play className="w-4 h-4 mr-2" />
-              What are DTFs?
-            </Button>
-          </div>
-
-          {/* Chart */}
-          <div className="h-64 bg-white/5 rounded-lg p-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af' }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af' }} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px' }}
-                  formatter={(value: any) => [formatCurrency(value), 'TVL']}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#3b82f6"
-                  fillOpacity={1}
-                  fill="url(#colorValue)"
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-
-        {/* DTF Categories */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mb-8"
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {categories.map((category, index) => (
-              <motion.div
-                key={category.name}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 + index * 0.1 }}
-              >
-                <Card
-                  className={cn(
-                    "cursor-pointer transition-all duration-300",
-                    activeCategory === category.name
-                      ? "bg-white/10 border-white/30"
-                      : "bg-white/5 border-white/20 hover:bg-white/8"
-                  )}
-                  onClick={() => setActiveCategory(category.name)}
-                >
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-lg bg-white/10">
-                        <category.icon className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-white">{category.name}</h3>
-                        <p className="text-white/70 text-sm mt-1">{category.description}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
 
         {/* Search and Filter */}
         <motion.div
@@ -388,7 +467,7 @@ export default function DTFPortfolioDashboard() {
                     <tr className="text-left">
                       <th className="px-6 py-4 text-white/70 font-medium">Name</th>
                       <th className="px-6 py-4 text-white/70 font-medium">Backing</th>
-                      <th className="px-6 py-4 text-white/70 font-medium">TVL (Last 7 Days)</th>
+                      <th className="px-6 py-4 text-white/70 font-medium">TVL</th>
                       <th className="px-6 py-4 text-white/70 font-medium">Market Cap</th>
                     </tr>
                   </thead>
@@ -466,24 +545,13 @@ export default function DTFPortfolioDashboard() {
                         <td className="px-6 py-4">
                           <DTFTokenTooltip tokens={dtf.tokens} maxDisplay={5} />
                         </td>
-                      <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <div className={cn(
-                              "text-sm font-medium",
-                              dtf.performance >= 0 ? "text-green-400" : "text-red-400"
-                            )}>
-                              {formatPercentage(dtf.performance)}
-                            </div>
-                            <div className="text-white/70 text-sm">
-                              (${dtf.price.toFixed(5)})
-                            </div>
-                          </div>
-                          <div className="w-16 h-8 bg-gradient-to-r from-red-500 to-green-500 rounded opacity-20 mt-1"></div>
+                        <td className="px-6 py-4">
+                          {renderDTFTVLDisplay(dtf.dtfAddress)}
                         </td>
                         <td className="px-6 py-4">
                           <div className="font-medium text-white">
                             {formatCompactCurrency(dtf.marketCap)}
-                          </div>
+                          </div>``
                         </td>
                       </motion.tr>
                       ))

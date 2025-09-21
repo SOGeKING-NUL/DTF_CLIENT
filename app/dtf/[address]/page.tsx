@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { ResponsiveContainer } from 'recharts';
 
 export default function DTFDetailPage() {
   const params = useParams();
@@ -180,6 +181,43 @@ export default function DTFDetailPage() {
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-12"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
+              <DollarSign className="w-5 h-5 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold">TVL in OSMO</h2>
+          </div>
+
+          <div className="flex items-center gap-4 mb-4">
+            <div className="text-4xl sm:text-5xl lg:text-6xl font-bold">
+              {renderTVLDisplay()}
+            </div>
+            <div className="flex items-center gap-2 bg-green-500/20 px-3 py-1 rounded-full">
+              <ArrowUp className="w-4 h-4 text-green-400" />
+            </div>
+            {!tvlLoading && !tvlError && (
+              <Button
+                onClick={fetchTotalTVL}
+                variant="outline"
+                size="sm"
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                title="Refresh TVL data"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+
+          <p className="text-white/70 mb-6">Annualized protocol revenue: $14.7M</p>
+
+
+          
+        </motion.div>
           <Link href="/dtf/discover-yield">
             <Button variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -234,6 +272,75 @@ export default function DTFDetailPage() {
                 </div>
               </div>
             </div>
+
+            {/* Chart */}
+          <div className="h-64 bg-white/5 rounded-lg p-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af' }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px' }}
+                  formatter={(value: any) => [formatCurrency(value), 'TVL']}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  stroke="#3b82f6"
+                  fillOpacity={1}
+                  fill="url(#colorValue)"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* DTF Categories */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="mb-8"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {categories.map((category, index) => (
+              <motion.div
+                key={category.name}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 + index * 0.1 }}
+              >
+                <Card
+                  className={cn(
+                    "cursor-pointer transition-all duration-300",
+                    activeCategory === category.name
+                      ? "bg-white/10 border-white/30"
+                      : "bg-white/5 border-white/20 hover:bg-white/8"
+                  )}
+                  onClick={() => setActiveCategory(category.name)}
+                >
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 rounded-lg bg-white/10">
+                        <category.icon className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-white">{category.name}</h3>
+                        <p className="text-white/70 text-sm mt-1">{category.description}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
           </CardHeader>
           
           <CardContent>

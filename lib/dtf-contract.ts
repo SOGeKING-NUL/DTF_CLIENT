@@ -3,7 +3,7 @@ import DTF_ABI from '@/DTF/abi/DTF';
 import DTFFACTORY_ABI from '@/DTF/abi/DTFFactory';
 import { ContractErrorHandler } from './contract-error-handler';
 
-const DTF_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_DTF_FACTORY_ADDRESS || "0xDA099Db187399f501bA3Dccf688DEd37fc66dF6e";
+const DTF_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_DTF_FACTORY_ADDRESS!;
 
 // =============================================================================
 // DTF FACTORY CONTRACT SERVICE

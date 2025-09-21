@@ -74,18 +74,14 @@ html {
       <body
         className={`${figtree.variable} ${instrumentSerif.variable} ${robotoMono.variable} antialiased`}
       >
-          <SidebarProvider>
-            {/* Mobile Header - only visible on mobile */}
-            <MobileHeader mockData={mockData} />
+        <SidebarProvider>
+          <MobileHeader mockData={mockData} />
+          <div className="w-full">
+            {children}
+          </div>
 
-            {/* Main Content */}
-            <div className="w-full">
-              {children}
-            </div>
-
-            {/* Mobile Chat - floating CTA with drawer */}
-            <MobileChat />
-          </SidebarProvider>
+          <MobileChat />
+        </SidebarProvider>
       </body>
     </html>
   );
