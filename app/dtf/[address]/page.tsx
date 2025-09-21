@@ -9,115 +9,204 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useWallet } from '@/hooks/use-wallet';
 import { useDTFContract, useDTFFactory } from '@/lib/dtf-contract';
+import { useDTF } from '@/hooks/use-dtf-context';
 import { 
   ArrowLeft,
   TrendingUp, 
-  TrendingDown, 
   DollarSign, 
-  Zap,
   RefreshCw,
-  ExternalLink,
   Copy,
   Calendar,
   Users,
   BarChart3,
-  Wallet,
   CheckCircle,
   AlertCircle,
   Info
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
-import { ResponsiveContainer } from 'recharts';
+import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 
 export default function DTFDetailPage() {
   const params = useParams();
-  const dtfAddress = params.address as string;
+  const rawAddress = params.address as string;
+  
+  // Normalize address: ensure 0x prefix and convert to lowercase
+  const dtfAddress = rawAddress.toLowerCase().startsWith('0x') ? rawAddress.toLowerCase() : `0x${rawAddress.toLowerCase()}`;
   
   const wallet = useWallet();
+  const { getDTFByAddress, isInitialized, loading: contextLoading } = useDTF();
   const dtfService = useDTFContract(wallet.provider, wallet.signer || undefined, dtfAddress);
   const factoryService = useDTFFactory(wallet.provider, wallet.signer || undefined);
 
   const [dtfInfo, setDtfInfo] = useState<any>(null);
-  const [portfolioData, setPortfolioData] = useState<any>(null);
+  const [tvlData, setTvlData] = useState<string>('0');
+  const [tvlLoading, setTvlLoading] = useState(false);
+  const [tvlError, setTvlError] = useState<string | null>(null);
+  const [ethPrice, setEthPrice] = useState<number>(0);
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [ethAmount, setEthAmount] = useState('');
-  const [dtfAmount, setDtfAmount] = useState('');
-  const [investing, setInvesting] = useState(false);
-  const [redeeming, setRedeeming] = useState(false);
+  const [dtfNotFound, setDtfNotFound] = useState(false);
 
-  // Load DTF information and portfolio data
+  // Mock data for the chart (you can replace this with real historical data)
+  const chartData = [
+    { time: 'Jan', value: 200000000 },
+    { time: 'Feb', value: 220000000 },
+    { time: 'Mar', value: 250000000 },
+    { time: 'Apr', value: 280000000 },
+    { time: 'May', value: 320000000 },
+    { time: 'Jun', value: 380000000 },
+    { time: 'Jul', value: 420000000 },
+    { time: 'Aug', value: 480000000 },
+    { time: 'Sep', value: 543018524 },
+  ];
+
+  // Load DTF information from context only
   useEffect(() => {
-    const loadDTFData = async () => {
-      if (!dtfService || !factoryService || !dtfAddress) return;
+    const loadDTFData = () => {
+      if (!dtfAddress) return;
       
+      // Wait for context to be initialized
+      if (!isInitialized) {
+        setLoading(true);
+        return;
+      }
+
       setLoading(true);
+      setDtfNotFound(false);
+      
       try {
-        // Load DTF info from factory
-        const info = await factoryService.getDTFInfo(dtfAddress);
-        setDtfInfo(info);
-
-        // Load portfolio data if wallet is connected
-        if (wallet.isConnected) {
-          const [portfolioValue, detailedPortfolio, totalSupply, userBalance] = await Promise.all([
-            dtfService.getCurrentPortfolioValue(),
-            dtfService.getDetailedPortfolio(),
-            dtfService.getTotalSupply(),
-            dtfService.getDTFBalance(wallet.account!)
-          ]);
-
-          setPortfolioData({
-            portfolioValue,
-            detailedPortfolio,
-            totalSupply,
-            userBalance
-          });
+        // Get DTF info from context only
+        const contextDtfInfo = getDTFByAddress(dtfAddress);
+        
+        if (contextDtfInfo) {
+          console.log('DTF found in context:', contextDtfInfo);
+          setDtfInfo(contextDtfInfo);
+          setDtfNotFound(false);
+        } else {
+          console.log('DTF not found in context');
+          setDtfNotFound(true);
         }
       } catch (error) {
-        console.error('Failed to load DTF data:', error);
+        console.error('Failed to load DTF data from context:', error);
+        setDtfNotFound(true);
       } finally {
         setLoading(false);
       }
     };
 
     loadDTFData();
-  }, [dtfService, factoryService, dtfAddress, wallet.isConnected, wallet.account]);
+  }, [isInitialized, dtfAddress, getDTFByAddress]);
 
-  const handleInvest = async () => {
-    if (!dtfService || !ethAmount) return;
-    
-    setInvesting(true);
-    try {
-      const receipt = await dtfService.mintWithEth(ethAmount);
-      console.log('Investment successful:', receipt);
-      setEthAmount('');
-      // Reload data
-      window.location.reload();
-    } catch (error) {
-      console.error('Investment failed:', error);
-      alert('Investment failed. Please try again.');
-    } finally {
-      setInvesting(false);
+  // Load TVL data using getTotalEthLocked only
+  useEffect(() => {
+    const loadTvlData = async () => {
+      if (!dtfService || !dtfInfo) return;
+      
+      setTvlLoading(true);
+      setTvlError(null);
+      
+      try {
+        console.log('Fetching TVL for DTF:', dtfInfo.name);
+        const tvl = await dtfService.getTotalEthLocked();
+        console.log('TVL fetched:', tvl, 'ETH');
+        setTvlData(tvl);
+      } catch (error) {
+        console.error('Failed to load TVL data:', error);
+        setTvlError('Failed to fetch TVL data');
+      } finally {
+        setTvlLoading(false);
+      }
+    };
+
+    loadTvlData();
+  }, [dtfService, dtfInfo]);
+
+  // Fetch ETH price from CoinGecko
+  useEffect(() => {
+    const fetchEthPrice = async () => {
+      setPriceLoading(true);
+      setPriceError(null);
+      
+      try {
+        const coinGeckoApiKey = process.env.NEXT_PUBLIC_COIN_GECKO_URL;
+        const baseUrl = 'https://api.coingecko.com/api/v3';
+        const url = `${baseUrl}/simple/price?ids=ethereum&vs_currencies=usd&x_cg_demo_api_key=${coinGeckoApiKey}`;
+        
+        console.log('Fetching ETH price from CoinGecko...');
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ETH price: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        const price = data.ethereum?.usd;
+        
+        if (price) {
+          console.log('ETH price fetched:', price);
+          setEthPrice(price);
+        } else {
+          throw new Error('Invalid price data received');
+        }
+      } catch (error) {
+        console.error('Failed to fetch ETH price:', error);
+        setPriceError('Failed to fetch ETH price');
+      } finally {
+        setPriceLoading(false);
+      }
+    };
+
+    fetchEthPrice();
+  }, []);
+
+  // Recalculate USD value when TVL or ETH price changes
+  useEffect(() => {
+    if (tvlData && ethPrice > 0) {
+      const tvlNum = parseFloat(tvlData);
+      const usdValue = tvlNum * ethPrice;
+      console.log('TVL USD Conversion:', {
+        tvlEth: tvlNum,
+        ethPriceUsd: ethPrice,
+        usdValue: usdValue,
+        formattedUsd: formatCurrency(usdValue)
+      });
     }
+  }, [tvlData, ethPrice]);
+
+  // Utility functions
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
   };
 
-  const handleRedeem = async () => {
-    if (!dtfService || !dtfAmount) return;
+  const formatTVLDisplay = (tvl: string) => {
+    const tvlNum = parseFloat(tvl);
+    if (tvlLoading || priceLoading) return 'Loading...';
+    if (tvlError) return 'Error loading TVL';
+    if (priceError) return 'Error loading price';
+    if (tvlNum === 0) return '$0';
     
-    setRedeeming(true);
-    try {
-      const receipt = await dtfService.redeemForEth(dtfAmount);
-      console.log('Redemption successful:', receipt);
-      setDtfAmount('');
-      // Reload data
-      window.location.reload();
-    } catch (error) {
-      console.error('Redemption failed:', error);
-      alert('Redemption failed. Please try again.');
-    } finally {
-      setRedeeming(false);
-    }
+    const usdValue = tvlNum * ethPrice;
+    console.log('USD Calculation:', {
+      tvlEth: tvlNum,
+      ethPrice: ethPrice,
+      usdValue: usdValue
+    });
+    return formatCurrency(usdValue);
   };
+
+  const getTvlUsdValue = () => {
+    const tvlNum = parseFloat(tvlData);
+    if (tvlNum === 0 || ethPrice === 0) return '0';
+    return (tvlNum * ethPrice).toFixed(2);
+  };
+
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -140,19 +229,24 @@ export default function DTFDetailPage() {
     return 'bg-green-500';
   };
 
-  if (loading) {
+  if (loading || !isInitialized) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 p-6">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-center py-20">
-            <RefreshCw className="w-8 h-8 animate-spin text-white" />
+            <div className="text-center">
+              <RefreshCw className="w-8 h-8 animate-spin text-white mx-auto mb-4" />
+              <p className="text-white/70">
+                {!isInitialized ? 'Initializing DTF context...' : 'Loading DTF data...'}
+              </p>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  if (!dtfInfo) {
+  if (dtfNotFound || !dtfInfo) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 p-6">
         <div className="max-w-6xl mx-auto">
@@ -161,12 +255,20 @@ export default function DTFDetailPage() {
               <AlertCircle className="w-16 h-16 mx-auto mb-6 text-red-500" />
               <h3 className="text-2xl font-semibold mb-4">DTF Not Found</h3>
               <p className="text-muted-foreground mb-6">
-                The DTF contract at address {dtfAddress} was not found or is invalid.
+                The DTF contract at address {dtfAddress} was not found in the factory context.
               </p>
-              <Link href="/dtf/discover-yield">
+              <div className="space-y-2 mb-6">
+                <p className="text-sm text-muted-foreground">
+                  Make sure the address is correct and the DTF was created through the factory contract.
+                </p>
+                <p className="text-xs text-muted-foreground font-mono">
+                  Address: {dtfAddress}
+                </p>
+              </div>
+              <Link href="/dtf">
                 <Button className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
                   <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to Discover DTFs
+                  Back to All DTFs
                 </Button>
               </Link>
             </CardContent>
@@ -181,47 +283,10 @@ export default function DTFDetailPage() {
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-12"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold">TVL in OSMO</h2>
-          </div>
-
-          <div className="flex items-center gap-4 mb-4">
-            <div className="text-4xl sm:text-5xl lg:text-6xl font-bold">
-              {renderTVLDisplay()}
-            </div>
-            <div className="flex items-center gap-2 bg-green-500/20 px-3 py-1 rounded-full">
-              <ArrowUp className="w-4 h-4 text-green-400" />
-            </div>
-            {!tvlLoading && !tvlError && (
-              <Button
-                onClick={fetchTotalTVL}
-                variant="outline"
-                size="sm"
-                className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                title="Refresh TVL data"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
-
-          <p className="text-white/70 mb-6">Annualized protocol revenue: $14.7M</p>
-
-
-          
-        </motion.div>
-          <Link href="/dtf/discover-yield">
+          <Link href="/dtf">
             <Button variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Discover
+              Back to All DTFs
             </Button>
           </Link>
           
@@ -272,75 +337,6 @@ export default function DTFDetailPage() {
                 </div>
               </div>
             </div>
-
-            {/* Chart */}
-          <div className="h-64 bg-white/5 rounded-lg p-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af' }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af' }} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px' }}
-                  formatter={(value: any) => [formatCurrency(value), 'TVL']}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#3b82f6"
-                  fillOpacity={1}
-                  fill="url(#colorValue)"
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* DTF Categories */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mb-8"
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {categories.map((category, index) => (
-              <motion.div
-                key={category.name}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 + index * 0.1 }}
-              >
-                <Card
-                  className={cn(
-                    "cursor-pointer transition-all duration-300",
-                    activeCategory === category.name
-                      ? "bg-white/10 border-white/30"
-                      : "bg-white/5 border-white/20 hover:bg-white/8"
-                  )}
-                  onClick={() => setActiveCategory(category.name)}
-                >
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-lg bg-white/10">
-                        <category.icon className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-white">{category.name}</h3>
-                        <p className="text-white/70 text-sm mt-1">{category.description}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
           </CardHeader>
           
           <CardContent>
@@ -408,194 +404,129 @@ export default function DTFDetailPage() {
                 </div>
               </div>
 
-              {/* Portfolio Stats */}
-              {portfolioData && (
-                <div>
-                  <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5" />
-                    Portfolio Stats
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-white/70">Total Value:</span>
-                      <span className="font-medium text-green-400">
-                        {parseFloat(portfolioData.portfolioValue).toFixed(4)} ETH
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-white/70">Total Supply:</span>
-                      <span className="font-medium">
-                        {parseFloat(portfolioData.totalSupply).toFixed(4)} DTF
-                      </span>
-                    </div>
-                    {wallet.isConnected && (
-                      <div className="flex justify-between">
-                        <span className="text-white/70">Your Balance:</span>
-                        <span className="font-medium text-blue-400">
-                          {parseFloat(portfolioData.userBalance).toFixed(4)} DTF
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Investment Interface */}
-        {wallet.isConnected ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Invest */}
-            <Card className="bg-white/5 backdrop-blur-md border-white/20">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5" />
-                  Invest in {dtfInfo.name}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-white/70">ETH Amount</label>
-                  <Input
-                    type="number"
-                    placeholder="Enter ETH amount"
-                    value={ethAmount}
-                    onChange={(e) => setEthAmount(e.target.value)}
-                    className="mt-1 bg-white/10 border-white/20 text-white"
-                  />
-                </div>
-                <Button 
-                  onClick={handleInvest} 
-                  disabled={investing || !ethAmount}
-                  className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
-                >
-                  {investing ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                      Investing...
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="w-4 h-4 mr-2" />
-                      Invest ETH
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Redeem */}
-            {portfolioData && parseFloat(portfolioData.userBalance) > 0 && (
-              <Card className="bg-white/5 backdrop-blur-md border-white/20">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingDown className="w-5 h-5" />
-                    Redeem {dtfInfo.symbol} Tokens
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-white/70">DTF Amount</label>
-                    <Input
-                      type="number"
-                      placeholder="Enter DTF amount"
-                      value={dtfAmount}
-                      onChange={(e) => setDtfAmount(e.target.value)}
-                      className="mt-1 bg-white/10 border-white/20 text-white"
-                    />
-                    <p className="text-xs text-white/50 mt-1">
-                      Available: {parseFloat(portfolioData.userBalance).toFixed(4)} {dtfInfo.symbol}
-                    </p>
-                  </div>
-                  <Button 
-                    onClick={handleRedeem} 
-                    disabled={redeeming || !dtfAmount}
-                    variant="outline"
-                    className="w-full border-white/20 text-white hover:bg-white/10"
-                  >
-                    {redeeming ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                        Redeeming...
-                      </>
-                    ) : (
-                      <>
-                        <DollarSign className="w-4 h-4 mr-2" />
-                        Redeem for ETH
-                      </>
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        ) : (
-          <Card className="bg-white/5 backdrop-blur-md border-white/20">
-            <CardContent className="p-8 text-center">
-              <Wallet className="w-12 h-12 mx-auto mb-4 text-white/70" />
-              <h3 className="text-xl font-semibold mb-2 text-white">Connect Your Wallet</h3>
-              <p className="text-white/70 mb-6">
-                Connect your wallet to invest in or redeem from this DTF
-              </p>
-              <Button 
-                onClick={wallet.connect}
-                disabled={wallet.isLoading}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-              >
-                {wallet.isLoading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <Wallet className="w-4 h-4 mr-2" />
-                    Connect Wallet
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Detailed Portfolio */}
-        {portfolioData && (
+        {/* TVL and Performance Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* TVL Card */}
           <Card className="bg-white/5 backdrop-blur-md border-white/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5" />
-                Detailed Portfolio
+                <DollarSign className="w-5 h-5" />
+                Total Value Locked (TVL)
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-white/20">
-                      <th className="text-left py-3 px-4">Token</th>
-                      <th className="text-left py-3 px-4">Balance</th>
-                      <th className="text-left py-3 px-4">ETH Value</th>
-                      <th className="text-left py-3 px-4">Weight</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {portfolioData.detailedPortfolio.tokenAddresses.map((token: string, index: number) => (
-                      <tr key={index} className="border-b border-white/10">
-                        <td className="py-3 px-4 font-medium">{getTokenSymbol(token)}</td>
-                        <td className="py-3 px-4">{parseFloat(portfolioData.detailedPortfolio.balances[index]).toFixed(4)}</td>
-                        <td className="py-3 px-4 text-green-400">
-                          {parseFloat(portfolioData.detailedPortfolio.ethValues[index]).toFixed(4)} ETH
-                        </td>
-                        <td className="py-3 px-4">{dtfInfo.weights[index]}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-4">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-white mb-2">
+                    {tvlLoading || priceLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <RefreshCw className="w-6 h-6 animate-spin" />
+                        Loading...
+                      </div>
+                    ) : tvlError ? (
+                      <span className="text-red-400">Error</span>
+                    ) : priceError ? (
+                      <span className="text-red-400">Price Error</span>
+                    ) : (
+                      formatTVLDisplay(tvlData)
+                    )}
+                  </div>
+                  <p className="text-white/70 text-sm">
+                    {tvlLoading ? 'Fetching TVL data...' : 
+                     priceLoading ? 'Fetching ETH price...' :
+                     tvlError ? 'Failed to load TVL' : 
+                     priceError ? 'Failed to load price' :
+                     `${parseFloat(tvlData).toFixed(4)} ETH`}
+                  </p>
+                  {!tvlLoading && !priceLoading && !tvlError && !priceError && ethPrice > 0 && (
+                    <p className="text-white/50 text-xs mt-1">
+                      ETH Price: ${ethPrice.toFixed(2)}
+                    </p>
+                  )}
+                </div>
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-white/70">DTF Name:</span>
+                    <span className="font-medium text-white">{dtfInfo.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/70">Symbol:</span>
+                    <span className="font-medium text-white">{dtfInfo.symbol}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/70">Status:</span>
+                    <span className={dtfInfo.active ? "text-green-400" : "text-red-400"}>
+                      {dtfInfo.active ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
-        )}
+
+          {/* Performance Chart */}
+          <Card className="bg-white/5 backdrop-blur-md border-white/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                Performance Overview
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis 
+                      dataKey="time" 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#9ca3af', fontSize: 12 }}
+                    />
+                    <YAxis 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#9ca3af', fontSize: 12 }}
+                      tickFormatter={(value) => `$${(value / 1000000).toFixed(1)}M`}
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '8px',
+                        color: 'white'
+                      }}
+                      formatter={(value: any) => [formatCurrency(value), 'Value']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#3b82f6"
+                      fillOpacity={1}
+                      fill="url(#colorValue)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 text-center">
+                <p className="text-white/70 text-sm">
+                  Historical performance data (mock data)
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
       </div>
     </div>
   );

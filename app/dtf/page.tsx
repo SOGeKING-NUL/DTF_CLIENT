@@ -32,7 +32,7 @@ import { useWallet } from '@/hooks/use-wallet';
 import { useTransformedDTFs, useDTF } from '@/hooks/use-dtf-context';
 import { DTFTokenTooltip } from '@/components/ui/dtf-token-tooltip';
 import { ethers } from 'ethers';
-import DTF_ABI from "@/DTF/abi/DTF";
+import {DTF_ABI} from '../../abi/DTF';
 
 // DTF data interface
 interface DTFData {
