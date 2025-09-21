@@ -65,6 +65,16 @@ export default function DTFDetailPage() {
   const [mintPreview, setMintPreview] = useState<any>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
+  
+  // Redemption state
+  const [dtfAmount, setDtfAmount] = useState('');
+  const [selectedRedeemSlippage, setSelectedRedeemSlippage] = useState(200); // 2% default
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemPreview, setRedeemPreview] = useState<any>(null);
+  const [redeemPreviewLoading, setRedeemPreviewLoading] = useState(false);
+  const [redeemTxHash, setRedeemTxHash] = useState<string | null>(null);
+  const [userDtfBalance, setUserDtfBalance] = useState<string>('0');
+  const [balanceLoading, setBalanceLoading] = useState(false);
 
   // Mock data for the chart (you can replace this with real historical data)
   const chartData = [
@@ -221,6 +231,58 @@ export default function DTFDetailPage() {
     return () => clearTimeout(timeoutId);
   }, [getMintPreview]);
 
+  // Fetch user's DTF balance
+  useEffect(() => {
+    const fetchUserBalance = async () => {
+      if (!dtfService || !wallet.account) {
+        setUserDtfBalance('0');
+        return;
+      }
+
+      setBalanceLoading(true);
+      try {
+        const balance = await dtfService.getDTFBalance(wallet.account);
+        setUserDtfBalance(balance);
+      } catch (error) {
+        console.error('Failed to fetch user DTF balance:', error);
+        setUserDtfBalance('0');
+      } finally {
+        setBalanceLoading(false);
+      }
+    };
+
+    fetchUserBalance();
+  }, [dtfService, wallet.account]);
+
+  // Memoized redemption preview function
+  const getRedeemPreview = useCallback(async () => {
+    if (!dtfAmount || !dtfService || !wallet.account || parseFloat(dtfAmount) <= 0) {
+      setRedeemPreview(null);
+      return;
+    }
+
+    setRedeemPreviewLoading(true);
+    try {
+      const preview = await dtfService.getUserPendingRedemptionValue(wallet.account, dtfAmount);
+      setRedeemPreview(preview);
+    } catch (error) {
+      console.error('Failed to get redemption preview:', error);
+      setRedeemPreview(null);
+    } finally {
+      setRedeemPreviewLoading(false);
+    }
+  }, [dtfAmount, selectedRedeemSlippage, dtfService, wallet.account]);
+
+  // Get redemption preview when DTF amount or slippage changes
+  useEffect(() => {
+    // Add debounce to prevent excessive calls
+    const timeoutId = setTimeout(() => {
+      getRedeemPreview();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [getRedeemPreview]);
+
   // Minting handlers
   const handleMint = async () => {
     if (!dtfService || !ethAmount || minting) return;
@@ -256,9 +318,59 @@ export default function DTFDetailPage() {
     }
   };
 
+  // Redemption handlers
+  const handleRedeem = async () => {
+    if (!dtfService || !dtfAmount || redeeming) return;
+    
+    setRedeeming(true);
+    setRedeemTxHash(null);
+    
+    try {
+      const receipt = await dtfService.redeemForEth(dtfAmount, selectedRedeemSlippage);
+      setRedeemTxHash(receipt.transactionHash);
+      
+      // Show success toast
+      console.log('Redemption successful:', receipt.transactionHash);
+      
+      // Reset form
+      setDtfAmount('');
+      setRedeemPreview(null);
+      
+      // Refresh TVL data and user balance after successful redemption
+      setTimeout(async () => {
+        try {
+          const newTvl = await dtfService.getTotalEthLocked();
+          setTvlData(newTvl);
+          
+          if (wallet.account) {
+            const newBalance = await dtfService.getDTFBalance(wallet.account);
+            setUserDtfBalance(newBalance);
+          }
+        } catch (error) {
+          console.error('Failed to refresh data after redemption:', error);
+        }
+      }, 1000); // Small delay to ensure transaction is processed
+    } catch (error) {
+      console.error('Redemption failed:', error);
+      // Show error toast
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
+  const handleMaxRedeem = () => {
+    setDtfAmount(userDtfBalance);
+  };
+
   const copyTxHash = () => {
     if (txHash) {
       navigator.clipboard.writeText(txHash);
+    }
+  };
+
+  const copyRedeemTxHash = () => {
+    if (redeemTxHash) {
+      navigator.clipboard.writeText(redeemTxHash);
     }
   };
 
@@ -774,6 +886,223 @@ export default function DTFDetailPage() {
               <h3 className="text-xl font-semibold mb-2 text-white">Connect Your Wallet</h3>
               <p className="text-white/70 mb-6">
                 Connect your wallet to mint {dtfInfo.symbol} tokens
+              </p>
+              <Button 
+                onClick={wallet.connect}
+                disabled={wallet.isLoading}
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+              >
+                {wallet.isLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 mr-2" />
+                    Connect Wallet
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Redemption Interface */}
+        {wallet.isConnected ? (
+          <Card className="bg-white/5 backdrop-blur-md border-white/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                Redeem {dtfInfo.symbol} Tokens
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* User Balance Display */}
+              <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                <div className="flex justify-between items-center">
+                  <span className="text-white/70">Your {dtfInfo.symbol} Balance:</span>
+                  <div className="flex items-center gap-2">
+                    {balanceLoading ? (
+                      <div className="flex items-center gap-2">
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span className="text-white/70">Loading...</span>
+                      </div>
+                    ) : (
+                      <span className="font-semibold text-white">
+                        {parseFloat(userDtfBalance).toFixed(4)} {dtfInfo.symbol}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* DTF Amount Input */}
+              <div>
+                <label className="text-sm font-medium text-white/70 mb-2 block">
+                  {dtfInfo.symbol} Amount to Redeem
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Enter DTF amount"
+                    value={dtfAmount}
+                    onChange={(e) => setDtfAmount(e.target.value)}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-white/40"
+                  />
+                  <Button
+                    onClick={handleMaxRedeem}
+                    disabled={balanceLoading || parseFloat(userDtfBalance) <= 0}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4"
+                  >
+                    Max
+                  </Button>
+                </div>
+                {parseFloat(dtfAmount) > parseFloat(userDtfBalance) && parseFloat(userDtfBalance) > 0 && (
+                  <p className="text-red-400 text-sm mt-1">
+                    Amount exceeds your balance
+                  </p>
+                )}
+              </div>
+
+              {/* Slippage Selection */}
+              <div>
+                <label className="text-sm font-medium text-white/70 mb-3 block">
+                  Slippage Tolerance
+                </label>
+                <div className="flex gap-2">
+                  {[
+                    { value: 200, label: '2%' },
+                    { value: 500, label: '5%' },
+                    { value: 800, label: '8%' }
+                  ].map((option) => (
+                    <Button
+                      key={option.value}
+                      variant={selectedRedeemSlippage === option.value ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSelectedRedeemSlippage(option.value)}
+                      className={cn(
+                        "flex-1",
+                        selectedRedeemSlippage === option.value
+                          ? "bg-blue-600 hover:bg-blue-700"
+                          : "bg-white/10 border-white/20 text-white hover:bg-white/20"
+                      )}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Redemption Preview */}
+              {redeemPreview && (
+                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                  <h4 className="font-semibold text-white mb-3">Redemption Preview</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-white/70">DTF Amount:</span>
+                      <span className="font-medium text-white">{dtfAmount} {dtfInfo.symbol}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Estimated ETH to Receive:</span>
+                      <span className="font-medium text-green-400">
+                        {parseFloat(redeemPreview.ethValue).toFixed(4)} ETH
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Fee:</span>
+                      <span className="font-medium text-yellow-400">
+                        {parseFloat(redeemPreview.fee).toFixed(4)} ETH
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Slippage:</span>
+                      <span className="font-medium text-white">
+                        {(selectedRedeemSlippage / 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Loading State */}
+              {redeemPreviewLoading && (
+                <div className="flex items-center justify-center gap-2 text-white/70">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Calculating redemption preview...</span>
+                </div>
+              )}
+
+              {/* Success State */}
+              {redeemTxHash && (
+                <div className="p-4 bg-green-500/20 rounded-lg border border-green-500/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="font-semibold text-green-300">Redemption Successful!</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-green-200">Transaction Hash:</span>
+                    <code className="text-xs bg-black/20 px-2 py-1 rounded text-green-300">
+                      {redeemTxHash.slice(0, 10)}...{redeemTxHash.slice(-8)}
+                    </code>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={copyRedeemTxHash}
+                      className="bg-green-500/20 border-green-500/30 text-green-300 hover:bg-green-500/30"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(`https://sepolia.etherscan.io/tx/${redeemTxHash}`, '_blank')}
+                      className="bg-green-500/20 border-green-500/30 text-green-300 hover:bg-green-500/30"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Redeem Button */}
+              <Button
+                onClick={handleRedeem}
+                disabled={
+                  redeeming || 
+                  !dtfAmount || 
+                  parseFloat(dtfAmount) <= 0 || 
+                  parseFloat(dtfAmount) > parseFloat(userDtfBalance) ||
+                  redeemPreviewLoading ||
+                  balanceLoading
+                }
+                className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
+              >
+                {redeeming ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Redeeming...
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="w-4 h-4 mr-2" />
+                    Redeem {dtfInfo.symbol} Tokens
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="bg-white/5 backdrop-blur-md border-white/20">
+            <CardContent className="p-8 text-center">
+              <div className="w-12 h-12 mx-auto mb-4 text-white/70">
+                <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold mb-2 text-white">Connect Your Wallet</h3>
+              <p className="text-white/70 mb-6">
+                Connect your wallet to redeem {dtfInfo.symbol} tokens
               </p>
               <Button 
                 onClick={wallet.connect}

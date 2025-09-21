@@ -565,9 +565,15 @@ export class DTFContractService {
    */
   async getUserPendingRedemptionValue(userAddress: string, dtfAmount: string) {
     try {
+      // Create a completely fresh read-only contract instance
       const readOnlyContract = new ethers.Contract(this.contract.target, this.contract.interface, this.provider);
       const dtfAmountWei = ethers.parseUnits(dtfAmount, 18);
-      const [ethValue, fee] = await readOnlyContract.getUserPendingRedemptionValue(userAddress, dtfAmountWei);
+      
+      // Call the function using staticCall to ensure it's read-only
+      const result = await readOnlyContract.getUserPendingRedemptionValue.staticCall(userAddress, dtfAmountWei);
+      
+      // Handle the result - it should be an array with [ethValue, fee]
+      const [ethValue, fee] = result;
       
       return {
         ethValue: ethers.formatEther(ethValue),
