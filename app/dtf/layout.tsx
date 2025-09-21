@@ -4,14 +4,9 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { MobileHeader } from "@/components/dashboard/mobile-header";
-import { DashboardSidebar } from "@/components/dashboard/sidebar";
-import PriceTicker from "@/components/web3/price-ticker";
 import mockDataJson from "@/mock.json";
 import type { MockData } from "@/types/dashboard";
-import Widget from "@/components/dashboard/widget";
-import Notifications from "@/components/dashboard/notification";
 import { MobileChat } from "@/components/chat/mobile-chat";
-import Chat from "@/components/chat/index";
 
 const mockData = mockDataJson as MockData;
 
@@ -65,14 +60,16 @@ export default function RootLayout({
           type="font/woff2"
           crossOrigin="anonymous"
         />
-        <style>{`
+        <style dangerouslySetInnerHTML={{
+          __html: `
 html {
   font-family: ${figtree.style.fontFamily};
   --font-sans: ${figtree.variable};
   --font-mono: ${GeistMono.variable};
   --font-instrument-serif: ${instrumentSerif.variable};
 }
-        `}</style>
+          `
+        }} />
       </head>
       <body
         className={`${figtree.variable} ${instrumentSerif.variable} ${robotoMono.variable} antialiased`}

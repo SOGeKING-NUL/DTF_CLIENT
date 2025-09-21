@@ -19,6 +19,7 @@ import {
   Star
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DTFIntegration } from "@/components/dtf/dtf-integration";
 
 interface YieldDTF {
   id: string;
@@ -367,6 +368,30 @@ export default function EarnYieldsPage() {
                   <div className="text-sm text-muted-foreground">Average Rating</div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* DTF Investment Integration */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="w-5 h-5" />
+                Invest in Your DTF
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DTFIntegration 
+                dtfAddress="0x0fba25a09dafe7a22fb51fc83d342034034e2cfd"
+                showInvest={true}
+                showPortfolio={true}
+                showCreate={false}
+              />
             </CardContent>
           </Card>
         </motion.div>

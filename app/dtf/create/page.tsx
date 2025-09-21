@@ -28,6 +28,7 @@ import {
   Target
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { DTFIntegration } from "@/components/dtf/dtf-integration"
 
 interface Token {
   id: string;
@@ -550,6 +551,32 @@ export default function CreateDTFPage() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* DTF Creation Integration */}
+          {step === 4 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="mt-8"
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Zap className="w-5 h-5" />
+                    Deploy Your DTF
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <DTFIntegration 
+                    showCreate={true}
+                    showInvest={false}
+                    showPortfolio={false}
+                  />
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
 
           {/* Navigation Buttons */}
           <motion.div
