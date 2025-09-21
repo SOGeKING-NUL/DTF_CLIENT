@@ -529,6 +529,172 @@ export class DTFContractService {
     }
   }
 
+  /**
+   * Get total value locked in the DTF
+   */
+  async getTotalValueLocked() {
+    try {
+      const readOnlyContract = new ethers.Contract(this.contract.target, this.contract.interface, this.provider);
+      const totalValue = await readOnlyContract.getTotalValueLocked();
+      return ethers.formatEther(totalValue);
+    } catch (error) {
+      console.error('Error getting total value locked:', error);
+      throw new Error(ContractErrorHandler.handleContractError(error));
+    }
+  }
+
+  /**
+   * Get user's DTF balance (alias for balanceOf)
+   * @param userAddress - User's address
+   */
+  async getUserDTFBalance(userAddress: string) {
+    try {
+      const readOnlyContract = new ethers.Contract(this.contract.target, this.contract.interface, this.provider);
+      const balance = await readOnlyContract.getUserDTFBalance(userAddress);
+      return ethers.formatUnits(balance, 18);
+    } catch (error) {
+      console.error('Error getting user DTF balance:', error);
+      throw new Error(ContractErrorHandler.handleContractError(error));
+    }
+  }
+
+  /**
+   * Get user's pending redemption value
+   * @param userAddress - User's address
+   * @param dtfAmount - Amount of DTF tokens
+   */
+  async getUserPendingRedemptionValue(userAddress: string, dtfAmount: string) {
+    try {
+      const readOnlyContract = new ethers.Contract(this.contract.target, this.contract.interface, this.provider);
+      const dtfAmountWei = ethers.parseUnits(dtfAmount, 18);
+      const [ethValue, fee] = await readOnlyContract.getUserPendingRedemptionValue(userAddress, dtfAmountWei);
+      
+      return {
+        ethValue: ethers.formatEther(ethValue),
+        fee: ethers.formatEther(fee)
+      };
+    } catch (error) {
+      console.error('Error getting user pending redemption value:', error);
+      throw new Error(ContractErrorHandler.handleContractError(error));
+    }
+  }
+
+  /**
+   * Get token details including balance, weight, and ETH value
+   * @param tokenAddress - Address of the token
+   */
+  async getTokenDetails(tokenAddress: string) {
+    try {
+      const readOnlyContract = new ethers.Contract(this.contract.target, this.contract.interface, this.provider);
+      const [balance, weight, ethValue] = await readOnlyContract.getTokenDetails(tokenAddress);
+      
+      return {
+        balance: ethers.formatUnits(balance, 18),
+        weight: Number(weight) / 100, // Convert from basis points to percentage
+        ethValue: ethers.formatEther(ethValue)
+      };
+    } catch (error) {
+      console.error('Error getting token details:', error);
+      throw new Error(ContractErrorHandler.handleContractError(error));
+    }
+  }
+
+  /**
+   * Get portfolio composition including addresses, balances, weights, and ETH values
+   */
+  async getPortfolioComposition() {
+    try {
+      const readOnlyContract = new ethers.Contract(this.contract.target, this.contract.interface, this.provider);
+      const [tokenAddresses, balances, weights, ethValues] = await readOnlyContract.getPortfolioComposition();
+      
+      return {
+        tokenAddresses,
+        balances: balances.map((b: any) => ethers.formatUnits(b, 18)),
+        weights: weights.map((w: any) => Number(w) / 100), // Convert from basis points to percentage
+        ethValues: ethValues.map((v: any) => ethers.formatEther(v))
+      };
+    } catch (error) {
+      console.error('Error getting portfolio composition:', error);
+      throw new Error(ContractErrorHandler.handleContractError(error));
+    }
+  }
+
+  /**
+   * Get contract age in seconds
+   */
+  async getContractAge() {
+    try {
+      const readOnlyContract = new ethers.Contract(this.contract.target, this.contract.interface, this.provider);
+      const age = await readOnlyContract.getContractAge();
+      return Number(age);
+    } catch (error) {
+      console.error('Error getting contract age:', error);
+      throw new Error(ContractErrorHandler.handleContractError(error));
+    }
+  }
+
+  /**
+   * Get fee status (pending fees amount)
+   */
+  async getFeeStatus() {
+    try {
+      const readOnlyContract = new ethers.Contract(this.contract.target, this.contract.interface, this.provider);
+      const fees = await readOnlyContract.getFeeStatus();
+      return ethers.formatEther(fees);
+    } catch (error) {
+      console.error('Error getting fee status:', error);
+      throw new Error(ContractErrorHandler.handleContractError(error));
+    }
+  }
+
+  /**
+   * Get mint preview showing DTF tokens to be minted and fees
+   * @param ethAmount - Amount of ETH to invest
+   * @param slippageBps - Slippage tolerance in basis points
+   */
+  async getMintPreview(ethAmount: string, slippageBps: number = 200) {
+    try {
+      const readOnlyContract = new ethers.Contract(this.contract.target, this.contract.interface, this.provider);
+      const ethAmountWei = ethers.parseEther(ethAmount);
+      const [dtfTokens, fee] = await readOnlyContract.getMintPreview(ethAmountWei, slippageBps);
+      
+      return {
+        dtfTokens: ethers.formatUnits(dtfTokens, 18),
+        fee: ethers.formatEther(fee)
+      };
+    } catch (error) {
+      console.error('Error getting mint preview:', error);
+      throw new Error(ContractErrorHandler.handleContractError(error));
+    }
+  }
+
+  /**
+   * Get active status of the DTF
+   */
+  async getActiveStatus() {
+    try {
+      const readOnlyContract = new ethers.Contract(this.contract.target, this.contract.interface, this.provider);
+      return await readOnlyContract.getActiveStatus();
+    } catch (error) {
+      console.error('Error getting active status:', error);
+      throw new Error(ContractErrorHandler.handleContractError(error));
+    }
+  }
+
+  /**
+   * Get total ETH locked in the contract
+   */
+  async getTotalEthLocked() {
+    try {
+      const readOnlyContract = new ethers.Contract(this.contract.target, this.contract.interface, this.provider);
+      const totalEth = await readOnlyContract.getTotalEthLocked();
+      return ethers.formatEther(totalEth);
+    } catch (error) {
+      console.error('Error getting total ETH locked:', error);
+      throw new Error(ContractErrorHandler.handleContractError(error));
+    }
+  }
+
   // =============================================================================
   // DTF EVENT LISTENERS
   // =============================================================================
