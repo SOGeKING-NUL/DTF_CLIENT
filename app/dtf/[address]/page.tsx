@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { useWallet } from '@/hooks/use-wallet';
 import { useDTFContract, useDTFFactory } from '@/lib/dtf-contract';
 import { useDTF } from '@/hooks/use-dtf-context';
+import ShaderBackground from '@/components/shader-background';
 import { 
   ArrowLeft,
   TrendingUp, 
@@ -21,7 +22,9 @@ import {
   BarChart3,
   CheckCircle,
   AlertCircle,
-  Info
+  Info,
+  Zap,
+  ExternalLink
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -36,7 +39,13 @@ export default function DTFDetailPage() {
   
   const wallet = useWallet();
   const { getDTFByAddress, isInitialized, loading: contextLoading } = useDTF();
-  const dtfService = useDTFContract(wallet.provider, wallet.signer || undefined, dtfAddress);
+  
+  // Memoize dtfService to prevent unnecessary re-renders
+  const dtfService = useMemo(() => {
+    if (!dtfAddress || !wallet.provider) return null;
+    return useDTFContract(wallet.provider, wallet.signer || undefined, dtfAddress);
+  }, [dtfAddress, wallet.provider, wallet.signer]);
+  
   const factoryService = useDTFFactory(wallet.provider, wallet.signer || undefined);
 
   const [dtfInfo, setDtfInfo] = useState<any>(null);
@@ -48,6 +57,14 @@ export default function DTFDetailPage() {
   const [priceError, setPriceError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [dtfNotFound, setDtfNotFound] = useState(false);
+  
+  // Minting state
+  const [ethAmount, setEthAmount] = useState('');
+  const [selectedSlippage, setSelectedSlippage] = useState(200); // 2% default
+  const [minting, setMinting] = useState(false);
+  const [mintPreview, setMintPreview] = useState<any>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
 
   // Mock data for the chart (you can replace this with real historical data)
   const chartData = [
@@ -121,7 +138,7 @@ export default function DTFDetailPage() {
     };
 
     loadTvlData();
-  }, [dtfService, dtfInfo]);
+  }, [dtfInfo?.dtfAddress]); // Only depend on DTF address, not the entire service
 
   // Fetch ETH price from CoinGecko
   useEffect(() => {
@@ -174,6 +191,76 @@ export default function DTFDetailPage() {
       });
     }
   }, [tvlData, ethPrice]);
+
+  // Memoized mint preview function
+  const getMintPreview = useCallback(async () => {
+    if (!ethAmount || !dtfService || parseFloat(ethAmount) <= 0) {
+      setMintPreview(null);
+      return;
+    }
+
+    setPreviewLoading(true);
+    try {
+      const preview = await dtfService.getMintPreview(ethAmount, selectedSlippage);
+      setMintPreview(preview);
+    } catch (error) {
+      console.error('Failed to get mint preview:', error);
+      setMintPreview(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [ethAmount, selectedSlippage, dtfService]);
+
+  // Get mint preview when ETH amount or slippage changes
+  useEffect(() => {
+    // Add debounce to prevent excessive calls
+    const timeoutId = setTimeout(() => {
+      getMintPreview();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [getMintPreview]);
+
+  // Minting handlers
+  const handleMint = async () => {
+    if (!dtfService || !ethAmount || minting) return;
+    
+    setMinting(true);
+    setTxHash(null);
+    
+    try {
+      const receipt = await dtfService.mintWithEth(ethAmount, selectedSlippage);
+      setTxHash(receipt.transactionHash);
+      
+      // Show success toast
+      console.log('Minting successful:', receipt.transactionHash);
+      
+      // Reset form
+      setEthAmount('');
+      setMintPreview(null);
+      
+      // Refresh TVL data after successful mint
+      setTimeout(async () => {
+        try {
+          const newTvl = await dtfService.getTotalEthLocked();
+          setTvlData(newTvl);
+        } catch (error) {
+          console.error('Failed to refresh TVL after mint:', error);
+        }
+      }, 1000); // Small delay to ensure transaction is processed
+    } catch (error) {
+      console.error('Minting failed:', error);
+      // Show error toast
+    } finally {
+      setMinting(false);
+    }
+  };
+
+  const copyTxHash = () => {
+    if (txHash) {
+      navigator.clipboard.writeText(txHash);
+    }
+  };
 
   // Utility functions
   const formatCurrency = (value: number) => {
@@ -231,56 +318,61 @@ export default function DTFDetailPage() {
 
   if (loading || !isInitialized) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <RefreshCw className="w-8 h-8 animate-spin text-white mx-auto mb-4" />
-              <p className="text-white/70">
-                {!isInitialized ? 'Initializing DTF context...' : 'Loading DTF data...'}
-              </p>
+      <ShaderBackground>
+        <div className="min-h-screen p-6">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex items-center justify-center py-20">
+              <div className="text-center">
+                <RefreshCw className="w-8 h-8 animate-spin text-white mx-auto mb-4" />
+                <p className="text-white/70">
+                  {!isInitialized ? 'Initializing DTF context...' : 'Loading DTF data...'}
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </ShaderBackground>
     );
   }
 
   if (dtfNotFound || !dtfInfo) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 p-6">
-        <div className="max-w-6xl mx-auto">
-          <Card>
-            <CardContent className="p-12 text-center">
-              <AlertCircle className="w-16 h-16 mx-auto mb-6 text-red-500" />
-              <h3 className="text-2xl font-semibold mb-4">DTF Not Found</h3>
-              <p className="text-muted-foreground mb-6">
-                The DTF contract at address {dtfAddress} was not found in the factory context.
-              </p>
-              <div className="space-y-2 mb-6">
-                <p className="text-sm text-muted-foreground">
-                  Make sure the address is correct and the DTF was created through the factory contract.
+      <ShaderBackground>
+        <div className="min-h-screen p-6">
+          <div className="max-w-6xl mx-auto">
+            <Card>
+              <CardContent className="p-12 text-center">
+                <AlertCircle className="w-16 h-16 mx-auto mb-6 text-red-500" />
+                <h3 className="text-2xl font-semibold mb-4">DTF Not Found</h3>
+                <p className="text-muted-foreground mb-6">
+                  The DTF contract at address {dtfAddress} was not found in the factory context.
                 </p>
-                <p className="text-xs text-muted-foreground font-mono">
-                  Address: {dtfAddress}
-                </p>
-              </div>
-              <Link href="/dtf">
-                <Button className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to All DTFs
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+                <div className="space-y-2 mb-6">
+                  <p className="text-sm text-muted-foreground">
+                    Make sure the address is correct and the DTF was created through the factory contract.
+                  </p>
+                  <p className="text-xs text-muted-foreground font-mono">
+                    Address: {dtfAddress}
+                  </p>
+                </div>
+                <Link href="/dtf">
+                  <Button className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back to All DTFs
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      </ShaderBackground>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 p-6">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <ShaderBackground>
+      <div className="min-h-screen p-6">
+        <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
           <Link href="/dtf">
@@ -527,7 +619,185 @@ export default function DTFDetailPage() {
           </Card>
         </div>
 
+        {/* Minting Interface */}
+        {wallet.isConnected ? (
+          <Card className="bg-white/5 backdrop-blur-md border-white/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="w-5 h-5" />
+                Mint {dtfInfo.symbol} Tokens
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* ETH Amount Input */}
+              <div>
+                <label className="text-sm font-medium text-white/70 mb-2 block">
+                  ETH Amount
+                </label>
+                <Input
+                  type="number"
+                  placeholder="Enter ETH amount"
+                  value={ethAmount}
+                  onChange={(e) => setEthAmount(e.target.value)}
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-white/40"
+                />
+              </div>
+
+              {/* Slippage Selection */}
+              <div>
+                <label className="text-sm font-medium text-white/70 mb-3 block">
+                  Slippage Tolerance
+                </label>
+                <div className="flex gap-2">
+                  {[
+                    { value: 200, label: '2%' },
+                    { value: 500, label: '5%' },
+                    { value: 800, label: '8%' }
+                  ].map((option) => (
+                    <Button
+                      key={option.value}
+                      variant={selectedSlippage === option.value ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSelectedSlippage(option.value)}
+                      className={cn(
+                        "flex-1",
+                        selectedSlippage === option.value
+                          ? "bg-blue-600 hover:bg-blue-700"
+                          : "bg-white/10 border-white/20 text-white hover:bg-white/20"
+                      )}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Mint Preview */}
+              {mintPreview && (
+                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                  <h4 className="font-semibold text-white mb-3">Mint Preview</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-white/70">ETH Amount:</span>
+                      <span className="font-medium text-white">{ethAmount} ETH</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Estimated DTF Tokens:</span>
+                      <span className="font-medium text-green-400">
+                        {parseFloat(mintPreview.dtfTokens).toFixed(4)} {dtfInfo.symbol}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Fee:</span>
+                      <span className="font-medium text-yellow-400">
+                        {parseFloat(mintPreview.fee).toFixed(4)} ETH
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Slippage:</span>
+                      <span className="font-medium text-white">
+                        {(selectedSlippage / 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Loading State */}
+              {previewLoading && (
+                <div className="flex items-center justify-center gap-2 text-white/70">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Calculating mint preview...</span>
+                </div>
+              )}
+
+              {/* Success State */}
+              {txHash && (
+                <div className="p-4 bg-green-500/20 rounded-lg border border-green-500/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="font-semibold text-green-300">Minting Successful!</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-green-200">Transaction Hash:</span>
+                    <code className="text-xs bg-black/20 px-2 py-1 rounded text-green-300">
+                      {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                    </code>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={copyTxHash}
+                      className="bg-green-500/20 border-green-500/30 text-green-300 hover:bg-green-500/30"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(`https://sepolia.etherscan.io/tx/${txHash}`, '_blank')}
+                      className="bg-green-500/20 border-green-500/30 text-green-300 hover:bg-green-500/30"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Mint Button */}
+              <Button
+                onClick={handleMint}
+                disabled={minting || !ethAmount || parseFloat(ethAmount) <= 0 || previewLoading}
+                className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
+              >
+                {minting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Minting...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 mr-2" />
+                    Mint {dtfInfo.symbol} Tokens
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="bg-white/5 backdrop-blur-md border-white/20">
+            <CardContent className="p-8 text-center">
+              <div className="w-12 h-12 mx-auto mb-4 text-white/70">
+                <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold mb-2 text-white">Connect Your Wallet</h3>
+              <p className="text-white/70 mb-6">
+                Connect your wallet to mint {dtfInfo.symbol} tokens
+              </p>
+              <Button 
+                onClick={wallet.connect}
+                disabled={wallet.isLoading}
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+              >
+                {wallet.isLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 mr-2" />
+                    Connect Wallet
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        </div>
       </div>
-    </div>
+    </ShaderBackground>
   );
 }

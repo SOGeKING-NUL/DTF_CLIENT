@@ -654,9 +654,15 @@ export class DTFContractService {
    */
   async getMintPreview(ethAmount: string, slippageBps: number = 200) {
     try {
+      // Create a completely fresh read-only contract instance
       const readOnlyContract = new ethers.Contract(this.contract.target, this.contract.interface, this.provider);
       const ethAmountWei = ethers.parseEther(ethAmount);
-      const [dtfTokens, fee] = await readOnlyContract.getMintPreview(ethAmountWei, slippageBps);
+      
+      // Call the function using staticCall to ensure it's read-only
+      const result = await readOnlyContract.getMintPreview.staticCall(ethAmountWei, slippageBps);
+      
+      // Handle the result - it should be an array with [dtfTokens, fee]
+      const [dtfTokens, fee] = result;
       
       return {
         dtfTokens: ethers.formatUnits(dtfTokens, 18),
