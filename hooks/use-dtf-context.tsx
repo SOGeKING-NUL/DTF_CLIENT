@@ -4,8 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { useWallet } from './use-wallet';
 import { useDTFFactory } from '@/lib/dtf-contract';
 import { ethers } from 'ethers';
-import DTFFACTORY_ABI from '@/DTF/abi/DTFFactory';
-
+import {DTFFACTORY_ABI} from "../abi/DTFFactory";
 // DTF data interface
 export interface DTFData {
   dtfAddress: string;
