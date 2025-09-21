@@ -417,20 +417,6 @@ export default function DiscoverYieldPage() {
                   ))}
                 </div>
 
-                {/* Sort */}
-                <div className="flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-white/50" />
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="px-3 py-1 rounded-md border border-white/20 bg-white/5 text-white text-sm"
-                  >
-                    <option value="newest">Newest First</option>
-                    <option value="oldest">Oldest First</option>
-                    <option value="name">Name A-Z</option>
-                  </select>
-                </div>
-
                 {/* Refresh */}
                 <Button
                   variant="outline"
@@ -449,13 +435,13 @@ export default function DiscoverYieldPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <Card className="bg-white/5 backdrop-blur-sm border-white/20">
               <CardContent className="p-6 text-center">
-                <div className="text-3xl font-bold text-blue-400">{allDTFs.length}</div>
+                <div className="text-3xl font-bold text-white">{allDTFs.length}</div>
                 <div className="text-sm text-white/70">Total DTFs</div>
               </CardContent>
             </Card>
             <Card className="bg-white/5 backdrop-blur-sm border-white/20">
               <CardContent className="p-6 text-center">
-                <div className="text-3xl font-bold text-green-400">
+                <div className="text-3xl font-bold text-white">
                   {allDTFs.filter(dtf => dtf.active).length}
                 </div>
                 <div className="text-sm text-white/70">Active DTFs</div>
@@ -463,7 +449,7 @@ export default function DiscoverYieldPage() {
             </Card>
             <Card className="bg-white/5 backdrop-blur-sm border-white/20">
               <CardContent className="p-6 text-center">
-                <div className="text-3xl font-bold text-purple-400">
+                <div className="text-3xl font-bold text-white">
                   {allDTFs.filter(dtf => Date.now() - (dtf.createdAt * 1000) < 24 * 60 * 60 * 1000).length}
                 </div>
                 <div className="text-sm text-white/70">Created Today</div>
@@ -471,7 +457,7 @@ export default function DiscoverYieldPage() {
             </Card>
             <Card className="bg-white/5 backdrop-blur-sm border-white/20">
               <CardContent className="p-6 text-center">
-                <div className="text-3xl font-bold text-orange-400">
+                <div className="text-3xl font-bold text-white">
                   {new Set(allDTFs.map(dtf => dtf.creator)).size}
                 </div>
                 <div className="text-sm text-white/70">Unique Creators</div>

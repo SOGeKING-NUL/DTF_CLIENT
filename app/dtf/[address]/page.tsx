@@ -6,7 +6,6 @@ import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { useWallet } from '@/hooks/use-wallet';
 import { useDTFContract, useDTFFactory } from '@/lib/dtf-contract';
 import { useDTF } from '@/hooks/use-dtf-context';
@@ -414,18 +413,21 @@ export default function DTFDetailPage() {
   const getTokenSymbol = (tokenAddress: string) => {
     if (tokenAddress === '0x0000000000000000000000000000000000000000') return 'ETH';
     const tokenMap: { [key: string]: string } = {
-      '0xA0b86a33E6441d8e3C0d0a3b8d0b8d0b8d0b8d0b': 'USDC',
+      '0x31d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0': 'USDC',
       '0xdAC17F958D2ee523a2206206994597C13D831ec7': 'USDT',
       '0x6B175474E89094C44Da98b954EedeAC495271d0F': 'DAI',
     };
     return tokenMap[tokenAddress] || tokenAddress.slice(0, 6) + '...';
   };
 
-  const getWeightColor = (weight: number) => {
-    if (weight >= 40) return 'bg-red-500';
-    if (weight >= 20) return 'bg-orange-500';
-    if (weight >= 10) return 'bg-yellow-500';
-    return 'bg-green-500';
+  const formatNumber = (value: string | number) => {
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (num >= 1000000) {
+      return `${(num / 1000000).toFixed(2)}M`;
+    } else if (num >= 1000) {
+      return `${(num / 1000).toFixed(1)}K`;
+    }
+    return num.toFixed(4);
   };
 
   if (loading || !isInitialized) {
@@ -493,29 +495,6 @@ export default function DTFDetailPage() {
               Back to All DTFs
             </Button>
           </Link>
-          
-          <div className="flex items-center gap-4">
-            {dtfInfo.active ? (
-              <Badge className="bg-green-500 text-white">
-                <CheckCircle className="w-3 h-3 mr-1" />
-                Active
-              </Badge>
-            ) : (
-              <Badge variant="secondary">
-                <AlertCircle className="w-3 h-3 mr-1" />
-                Inactive
-              </Badge>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => copyToClipboard(dtfAddress)}
-              className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-            >
-              <Copy className="w-4 h-4 mr-1" />
-              Copy Address
-            </Button>
-          </div>
         </div>
 
         {/* DTF Overview */}
@@ -579,34 +558,9 @@ export default function DTFDetailPage() {
                   </div>
                 </div>
               </div>
-
-              {/* Contract Info */}
-              <div>
-                <h4 className="font-semibold mb-3 flex items-center gap-2">
-                  <Info className="w-5 h-5" />
-                  Contract Info
-                </h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-white/70">Address:</span>
-                    <span className="font-mono text-xs">
-                      {dtfAddress.slice(0, 6)}...{dtfAddress.slice(-4)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/70">Creator:</span>
-                    <span className="font-mono text-xs">
-                      {dtfInfo.creator.slice(0, 6)}...{dtfInfo.creator.slice(-4)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/70">Status:</span>
-                    <span className={dtfInfo.active ? "text-green-400" : "text-red-400"}>
-                      {dtfInfo.active ? "Active" : "Inactive"}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <div className="text-white/70">Total Value Locked</div>
+            </div>
+          </div>
 
             </div>
           </CardContent>
@@ -1123,7 +1077,7 @@ export default function DTFDetailPage() {
               </Button>
             </CardContent>
           </Card>
-        )}
+        </motion.div>
 
         </div>
       </div>
