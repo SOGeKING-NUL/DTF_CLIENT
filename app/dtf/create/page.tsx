@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useWallet } from '@/hooks/use-wallet'
+import Link from 'next/link'
 import { 
   ArrowRight, 
   ArrowLeft, 
@@ -25,7 +27,9 @@ import {
   TrendingUp,
   Shield,
   Zap,
-  Target
+  Target,
+  DollarSign,
+  Search
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DTFIntegration } from "@/components/dtf/dtf-integration"
@@ -57,6 +61,7 @@ interface RebalanceRule {
 }
 
 export default function CreateDTFPage() {
+  const wallet = useWallet()
   const [step, setStep] = useState(1)
   const [selectedTokens, setSelectedTokens] = useState<Token[]>([])
   const [dtfName, setDtfName] = useState("")
@@ -107,20 +112,92 @@ export default function CreateDTFPage() {
     }
   }
 
+  if (!wallet.isConnected) {
+    return (
+      <div className="min-h-screen bg-black text-white">
+        {/* Header */}
+        <header className="border-b border-white/10 bg-black/50 backdrop-blur-sm sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4 sm:gap-8">
+                <Link href="/">
+                  <h1 className="text-xl sm:text-2xl font-bold">OSMO</h1>
+                </Link>
+                <nav className="hidden lg:flex items-center gap-6">
+                  <Link href="/dtf/discover-yield" className="text-white/70 hover:text-white transition-colors">Discover DTFs</Link>
+                  <Link href="/dtf/earn-yields" className="text-white/70 hover:text-white transition-colors">Earn Yield</Link>
+                  <Link href="/dtf/create" className="text-blue-400 font-medium">Create New DTF</Link>
+                </nav>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+          <Card className="bg-white/5 backdrop-blur-sm border-white/20">
+            <CardContent className="p-12 text-center">
+              <div className="w-16 h-16 mx-auto mb-6 text-white/70 flex items-center justify-center">
+                <Target className="w-16 h-16" />
+              </div>
+              <h3 className="text-2xl font-semibold mb-4 text-white">Connect Your Wallet</h3>
+              <p className="text-white/70 mb-6 max-w-md mx-auto">
+                Connect your wallet to create and deploy your own DTF with custom token allocations and rebalancing rules.
+              </p>
+              <Button 
+                onClick={wallet.connect} 
+                disabled={wallet.isLoading}
+                size="lg" 
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
+              >
+                {wallet.isLoading ? "Connecting..." : "Connect Wallet"}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <main className="relative z-10 max-w-6xl mx-auto px-4 pt-8 pb-20">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
-        <h1 className="text-4xl md:text-6xl font-semibold mb-3 bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
-          Create new DTF
-        </h1>
-        <p className="text-muted-foreground text-lg max-w-2xl">
-          Design a token folio in minutes. Pick assets, set weights and rules, then preview and deploy on‑chain.
-        </p>
-      </motion.div>
+    <div className="min-h-screen bg-black text-white">
+      {/* Header */}
+      <header className="border-b border-white/10 bg-black/50 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4 sm:gap-8">
+              <Link href="/">
+                <h1 className="text-xl sm:text-2xl font-bold">OSMO</h1>
+              </Link>
+              <nav className="hidden lg:flex items-center gap-6">
+                <Link href="/dtf/discover-yield" className="text-white/70 hover:text-white transition-colors">Discover DTFs</Link>
+                <Link href="/dtf/earn-yields" className="text-white/70 hover:text-white transition-colors">Earn Yield</Link>
+                <Link href="/dtf/create" className="text-blue-400 font-medium">Create New DTF</Link>
+              </nav>
+            </div>
+            <div className="flex items-center gap-2 sm:gap-4">
+              <button className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                <Search className="w-4 h-4 sm:w-5 sm:h-5 text-white/70" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="relative z-10 max-w-6xl mx-auto px-4 pt-8 pb-20">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <h1 className="text-4xl md:text-6xl font-semibold mb-3 bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+            Create new DTF
+          </h1>
+          <p className="text-white/70 text-lg max-w-2xl">
+            Design a token folio in minutes. Pick assets, set weights and rules, then preview and deploy on‑chain.
+          </p>
+        </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3 space-y-6">
@@ -130,7 +207,7 @@ export default function CreateDTFPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <Card>
+            <Card className="bg-white/5 backdrop-blur-sm border-white/20">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   {[1, 2, 3, 4].map((s) => (
@@ -142,13 +219,13 @@ export default function CreateDTFPage() {
                       className={cn(
                         "flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300",
                         step >= s 
-                          ? "bg-primary text-primary-foreground shadow-lg" 
-                          : "bg-muted text-muted-foreground"
+                          ? "bg-blue-600 text-white shadow-lg" 
+                          : "bg-white/10 text-white/70"
                       )}
                     >
                       <div className={cn(
                         "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
-                        step >= s ? "bg-primary-foreground/20" : "bg-muted-foreground/20"
+                        step >= s ? "bg-white/20" : "bg-white/20"
                       )}>
                         {s}
                       </div>
@@ -176,9 +253,9 @@ export default function CreateDTFPage() {
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <Card>
+                <Card className="bg-white/5 backdrop-blur-sm border-white/20">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                    <CardTitle className="flex items-center gap-2 text-white">
                       <Target className="w-5 h-5" />
                       Select Assets & Set Weights
                     </CardTitle>
@@ -186,7 +263,7 @@ export default function CreateDTFPage() {
                   <CardContent className="space-y-6">
                     {/* Available Tokens */}
                     <div>
-                      <h3 className="text-lg font-semibold mb-4">Available Tokens</h3>
+                      <h3 className="text-lg font-semibold mb-4 text-white">Available Tokens</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {availableTokens.map((token) => (
                           <motion.button
@@ -196,10 +273,10 @@ export default function CreateDTFPage() {
                             onClick={() => addToken(token)}
                             disabled={!!selectedTokens.find(t => t.id === token.id)}
                             className={cn(
-                              "p-4 rounded-lg border border-border hover:border-primary/50 transition-all duration-200 text-left",
+                              "p-4 rounded-lg border border-white/20 hover:border-blue-500/50 transition-all duration-200 text-left bg-white/5",
                               selectedTokens.find(t => t.id === token.id) 
                                 ? "opacity-50 cursor-not-allowed" 
-                                : "hover:bg-accent/50"
+                                : "hover:bg-white/10"
                             )}
                           >
                             <div className="flex items-center gap-3">
@@ -210,9 +287,9 @@ export default function CreateDTFPage() {
                                 {token.logo}
                               </div>
                               <div>
-                                <div className="font-medium">{token.symbol}</div>
-                                <div className="text-sm text-muted-foreground">{token.name}</div>
-                                <div className="text-sm font-medium">${token.price.toLocaleString()}</div>
+                                <div className="font-medium text-white">{token.symbol}</div>
+                                <div className="text-sm text-white/70">{token.name}</div>
+                                <div className="text-sm font-medium text-white">${token.price.toLocaleString()}</div>
                               </div>
                             </div>
                           </motion.button>
@@ -224,8 +301,8 @@ export default function CreateDTFPage() {
                     {selectedTokens.length > 0 && (
                       <div>
                         <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-lg font-semibold">Portfolio Allocation</h3>
-                          <Badge variant={totalWeight === 100 ? "default" : "destructive"}>
+                          <h3 className="text-lg font-semibold text-white">Portfolio Allocation</h3>
+                          <Badge variant={totalWeight === 100 ? "default" : "destructive"} className={totalWeight === 100 ? "bg-green-600" : "bg-red-600"}>
                             {totalWeight}% Total
                           </Badge>
                         </div>
@@ -235,7 +312,7 @@ export default function CreateDTFPage() {
                               key={token.id}
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
-                              className="p-4 rounded-lg border border-border bg-accent/20"
+                              className="p-4 rounded-lg border border-white/20 bg-white/10"
                             >
                               <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-3">
@@ -246,17 +323,17 @@ export default function CreateDTFPage() {
                                     {token.logo}
                                   </div>
                                   <div>
-                                    <div className="font-medium">{token.symbol}</div>
-                                    <div className="text-sm text-muted-foreground">{token.name}</div>
+                                    <div className="font-medium text-white">{token.symbol}</div>
+                                    <div className="text-sm text-white/70">{token.name}</div>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-2xl font-bold">{token.weight}%</span>
+                                  <span className="text-2xl font-bold text-white">{token.weight}%</span>
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => removeToken(token.id)}
-                                    className="text-destructive hover:text-destructive"
+                                    className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </Button>
@@ -288,9 +365,9 @@ export default function CreateDTFPage() {
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <Card>
+                <Card className="bg-white/5 backdrop-blur-sm border-white/20">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                    <CardTitle className="flex items-center gap-2 text-white">
                       <TrendingUp className="w-5 h-5" />
                       DTF Configuration
                     </CardTitle>
@@ -298,33 +375,33 @@ export default function CreateDTFPage() {
                   <CardContent className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <Label htmlFor="dtfName">DTF Name</Label>
+                        <Label htmlFor="dtfName" className="text-white">DTF Name</Label>
                         <Input
                           id="dtfName"
                           value={dtfName}
                           onChange={(e) => setDtfName(e.target.value)}
                           placeholder="e.g., DeFi Blue Chips"
-                          className="w-full"
+                          className="w-full bg-white/5 border-white/20 text-white placeholder:text-white/50 focus:border-white/40"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="dtfSymbol">DTF Symbol</Label>
+                        <Label htmlFor="dtfSymbol" className="text-white">DTF Symbol</Label>
                         <Input
                           id="dtfSymbol"
                           placeholder="e.g., DBC"
-                          className="w-full"
+                          className="w-full bg-white/5 border-white/20 text-white placeholder:text-white/50 focus:border-white/40"
                         />
                       </div>
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="dtfDescription">Description</Label>
+                      <Label htmlFor="dtfDescription" className="text-white">Description</Label>
                       <Input
                         id="dtfDescription"
                         value={dtfDescription}
                         onChange={(e) => setDtfDescription(e.target.value)}
                         placeholder="Describe your DTF strategy and goals..."
-                        className="w-full"
+                        className="w-full bg-white/5 border-white/20 text-white placeholder:text-white/50 focus:border-white/40"
                       />
                     </div>
 
@@ -571,8 +648,7 @@ export default function CreateDTFPage() {
                   <DTFIntegration 
                     showCreate={true}
                     showInvest={false}
-                    showPortfolio={false}
-                  />
+                    showPortfolio={false} dtfAddress={"0x0000000000000000000000000000000000000000"}                  />
                 </CardContent>
               </Card>
             </motion.div>
@@ -589,7 +665,7 @@ export default function CreateDTFPage() {
               variant="outline"
               onClick={() => setStep(step - 1)}
               disabled={step === 1}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 bg-white/10 border-white/20 text-white hover:bg-white/20"
             >
               <ArrowLeft className="w-4 h-4" />
               Back
@@ -598,7 +674,7 @@ export default function CreateDTFPage() {
             <Button
               onClick={() => setStep(step + 1)}
               disabled={!canProceed()}
-              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
             >
               {step === 4 ? "Deploy DTF" : "Next"}
               {step !== 4 && <ArrowRight className="w-4 h-4" />}
@@ -614,67 +690,68 @@ export default function CreateDTFPage() {
             transition={{ delay: 0.3 }}
             className="sticky top-6 space-y-6"
           >
-            <Card>
+            <Card className="bg-white/5 backdrop-blur-sm border-white/20">
               <CardHeader>
-                <CardTitle className="text-lg">DTF Tips</CardTitle>
+                <CardTitle className="text-lg text-white">DTF Tips</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Target className="w-3 h-3 text-primary" />
+                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Target className="w-3 h-3 text-blue-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Diversification</p>
-                      <p className="text-xs text-muted-foreground">Use diversified sectors to reduce idiosyncratic risk</p>
+                      <p className="text-sm font-medium text-white">Diversification</p>
+                      <p className="text-xs text-white/70">Use diversified sectors to reduce idiosyncratic risk</p>
                     </div>
                   </div>
                   
                   <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <TrendingUp className="w-3 h-3 text-primary" />
+                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <TrendingUp className="w-3 h-3 text-blue-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Turnover</p>
-                      <p className="text-xs text-muted-foreground">Keep turnover reasonable to minimize costs</p>
+                      <p className="text-sm font-medium text-white">Turnover</p>
+                      <p className="text-xs text-white/70">Keep turnover reasonable to minimize costs</p>
                     </div>
                   </div>
                   
                   <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Shield className="w-3 h-3 text-primary" />
+                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Shield className="w-3 h-3 text-blue-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Testing</p>
-                      <p className="text-xs text-muted-foreground">Test rebalancing rules against past volatility</p>
+                      <p className="text-sm font-medium text-white">Testing</p>
+                      <p className="text-xs text-white/70">Test rebalancing rules against past volatility</p>
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="bg-white/5 backdrop-blur-sm border-white/20">
               <CardHeader>
-                <CardTitle className="text-lg">Quick Stats</CardTitle>
+                <CardTitle className="text-lg text-white">Quick Stats</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Selected Assets:</span>
-                  <span className="font-medium">{selectedTokens.length}</span>
+                  <span className="text-sm text-white/70">Selected Assets:</span>
+                  <span className="font-medium text-white">{selectedTokens.length}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Total Weight:</span>
-                  <span className="font-medium">{totalWeight}%</span>
+                  <span className="text-sm text-white/70">Total Weight:</span>
+                  <span className="font-medium text-white">{totalWeight}%</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Estimated Fee:</span>
-                  <span className="font-medium">{rebalanceRules.fee}% APY</span>
+                  <span className="text-sm text-white/70">Estimated Fee:</span>
+                  <span className="font-medium text-white">{rebalanceRules.fee}% APY</span>
                 </div>
               </CardContent>
             </Card>
           </motion.div>
         </div>
       </div>
-    </main>
+      </main>
+    </div>
   )
 }
